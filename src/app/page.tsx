@@ -1,9 +1,12 @@
-import { listFiles } from './actions';
 import { Dashboard } from '@/components/Dashboard';
+import { StorageProviderWrapper } from '@/context/StorageContext';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Page() {
-    const files = await listFiles();
-    return <Dashboard files={files} />;
+    return (
+        <StorageProviderWrapper>
+            <Dashboard />
+        </StorageProviderWrapper>
+    );
 }

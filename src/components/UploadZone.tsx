@@ -2,17 +2,16 @@
 
 import { useState, useCallback } from 'react';
 import { UploadCloud, Loader2 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
-import { useRouter } from 'next/navigation';
+import { useStorage } from '@/context/StorageContext';
 
 interface UploadZoneProps {
     onUploadComplete: () => void;
 }
 
 export function UploadZone({ onUploadComplete }: UploadZoneProps) {
+    const { uploadFile: contextUploadFile } = useStorage();
     const [isDragging, setIsDragging] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
-    const [uploadProgress, setUploadProgress] = useState(0);
 
     const handleDragOver = useCallback((e: React.DragEvent) => {
         e.preventDefault();
@@ -26,17 +25,7 @@ export function UploadZone({ onUploadComplete }: UploadZoneProps) {
 
     const uploadFile = async (file: File) => {
         try {
-            const sanitizedName = file.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9.-]/g, '_');
-            const fileName = `${Date.now().toLocaleString()}_${sanitizedName}`;
-            const { error } = await supabase.storage
-                .from('files')
-                .upload(fileName, file, {
-                    cacheControl: '3600',
-                    upsert: false
-                });
-
-            if (error) throw error;
-            return fileName;
+            await contextUploadFile(file);
         } catch (error) {
             console.error('Upload failed', error);
             throw error;

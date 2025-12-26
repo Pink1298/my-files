@@ -1,38 +1,27 @@
 'use client';
 
-import { FileItem } from '@/app/actions';
 import { UploadZone } from './UploadZone';
 import { FileCard } from './FileCard';
-import { useRouter } from 'next/navigation';
-import { RefreshCw, ArrowUpWideNarrow, ArrowDownWideNarrow } from 'lucide-react';
-import { useState, useTransition } from 'react';
+import { RefreshCw, ArrowUpWideNarrow, ArrowDownWideNarrow, Settings, X, AlertCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useStorage } from '@/context/StorageContext';
 
-interface DashboardProps {
-    files: FileItem[];
-}
-
-export function Dashboard({ files }: DashboardProps) {
-    const router = useRouter();
-    const [isPending, startTransition] = useTransition();
+export function Dashboard() {
+    const { files, providerName, setProviderName, refreshFiles, isLoading, error } = useStorage();
 
     const [pinnedFiles, setPinnedFiles] = useState<string[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [sortBy, setSortBy] = useState<'date' | 'name' | 'size' | 'type'>('date');
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-
-    const handleRefresh = () => {
-        startTransition(() => {
-            router.refresh();
-        });
-    };
+    const [showSettings, setShowSettings] = useState(false);
 
     // Load pinned files from localStorage on mount
-    useState(() => {
+    useEffect(() => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('pinnedFiles');
             if (saved) setPinnedFiles(JSON.parse(saved));
         }
-    });
+    }, []);
 
     const togglePin = (key: string) => {
         const newPinned = pinnedFiles.includes(key)
@@ -42,41 +31,39 @@ export function Dashboard({ files }: DashboardProps) {
         localStorage.setItem('pinnedFiles', JSON.stringify(newPinned));
     };
 
-    const filteredFiles = files.filter(file =>
-        file.key.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    const sortedFiles = [...(files || [])]
+        .filter(file => file.key.toLowerCase().includes(searchQuery.toLowerCase()))
+        .sort((a, b) => {
+            // Pinned files always first
+            const aPinned = pinnedFiles.includes(a.key);
+            const bPinned = pinnedFiles.includes(b.key);
+            if (aPinned && !bPinned) return -1;
+            if (!aPinned && bPinned) return 1;
 
-    const sortedFiles = [...filteredFiles].sort((a, b) => {
-        // Pinned files always first
-        const aPinned = pinnedFiles.includes(a.key);
-        const bPinned = pinnedFiles.includes(b.key);
-        if (aPinned && !bPinned) return -1;
-        if (!aPinned && bPinned) return 1;
-
-        // Then custom sort
-        let comparison = 0;
-        switch (sortBy) {
-            case 'name':
-                comparison = a.key.localeCompare(b.key);
-                break;
-            case 'size':
-                comparison = a.size - b.size;
-                break;
-            case 'type':
-                const extA = a.key.split('.').pop() || '';
-                const extB = b.key.split('.').pop() || '';
-                comparison = extA.localeCompare(extB);
-                break;
-            case 'date':
-            default:
-                comparison = new Date(a.lastModified).getTime() - new Date(b.lastModified).getTime();
-                break;
-        }
-        return sortOrder === 'asc' ? comparison : -comparison;
-    });
+            // Then custom sort
+            let comparison = 0;
+            switch (sortBy) {
+                case 'name':
+                    comparison = a.key.localeCompare(b.key);
+                    break;
+                case 'size':
+                    comparison = a.size - b.size;
+                    break;
+                case 'type':
+                    const extA = a.key.split('.').pop() || '';
+                    const extB = b.key.split('.').pop() || '';
+                    comparison = extA.localeCompare(extB);
+                    break;
+                case 'date':
+                default:
+                    comparison = new Date(a.lastModified).getTime() - new Date(b.lastModified).getTime();
+                    break;
+            }
+            return sortOrder === 'asc' ? comparison : -comparison;
+        });
 
     return (
-        <div className="container mx-auto px-4 py-8 max-w-7xl min-h-screen">
+        <div className="container mx-auto px-4 py-8 max-w-7xl min-h-screen relative">
             <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10">
                 <div>
                     <h1 className="text-4xl font-bold bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
@@ -86,19 +73,85 @@ export function Dashboard({ files }: DashboardProps) {
                 </div>
                 <div className="flex items-center gap-3">
                     <button
-                        className={`flex items-center justify-center w-10 h-10 rounded-xl bg-white/5 border border-white/10 text-slate-400 hover:text-white hover:bg-white/10 transition-all ${isPending ? 'animate-spin' : 'hover:rotate-180 duration-500'}`}
-                        onClick={handleRefresh}
-                        disabled={isPending}
+                        className="flex items-center justify-center w-10 h-10 rounded-xl bg-white/5 border border-white/10 text-slate-400 hover:text-white hover:bg-white/10 transition-all hover:rotate-90"
+                        onClick={() => setShowSettings(true)}
+                        title="Settings"
+                    >
+                        <Settings size={20} />
+                    </button>
+                    <button
+                        className={`flex items-center justify-center w-10 h-10 rounded-xl bg-white/5 border border-white/10 text-slate-400 hover:text-white hover:bg-white/10 transition-all ${isLoading ? 'animate-spin' : 'hover:rotate-180 duration-500'}`}
+                        onClick={refreshFiles}
+                        disabled={isLoading}
                         title="Refresh"
                     >
                         <RefreshCw size={20} />
                     </button>
-                    {/* Add User Profile or other actions here later */}
                 </div>
             </header>
 
+            {/* Settings Modal */}
+            {showSettings && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                    <div className="bg-slate-900 border border-white/10 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-xl font-bold text-white">Settings</h2>
+                            <button onClick={() => setShowSettings(false)} className="text-slate-400 hover:text-white transition-colors">
+                                <X size={24} />
+                            </button>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-400 mb-2">Storage Provider</label>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button
+                                        onClick={() => setProviderName('supabase')}
+                                        className={`px-4 py-3 rounded-xl border transition-all ${providerName === 'supabase'
+                                            ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300'
+                                            : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
+                                            }`}
+                                    >
+                                        Supabase
+                                    </button>
+                                    <button
+                                        disabled
+                                        onClick={() => setProviderName('firebase')}
+                                        className={`px-4 py-3 rounded-xl border transition-all ${providerName === 'firebase'
+                                            ? 'bg-orange-500/20 border-orange-500 text-orange-300'
+                                            : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
+                                            }`}
+                                    >
+                                        Firebase
+                                    </button>
+                                </div>
+                                <p className="text-xs text-slate-500 mt-2">
+                                    Current Provider: <span className="text-white font-medium capitalize">{providerName}</span>
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="mt-8 flex justify-end">
+                            <button
+                                onClick={() => setShowSettings(false)}
+                                className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors"
+                            >
+                                Done
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {error && (
+                <div className="mb-6 bg-red-500/10 border border-red-500/20 rounded-xl p-4 flex items-center gap-3 text-red-400">
+                    <AlertCircle size={20} />
+                    <p>{error}</p>
+                </div>
+            )}
+
             <div className="mb-10">
-                <UploadZone onUploadComplete={handleRefresh} />
+                <UploadZone onUploadComplete={refreshFiles} />
             </div>
 
             <section className="space-y-6">
@@ -180,7 +233,7 @@ export function Dashboard({ files }: DashboardProps) {
                                 file={file}
                                 isPinned={pinnedFiles.includes(file.key)}
                                 onTogglePin={togglePin}
-                                onDeleted={handleRefresh}
+                                onDeleted={refreshFiles}
                             />
                         ))}
                     </div>
